@@ -101,7 +101,7 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
               onPressed: () {
                 downloadAndSaveFile(
                     'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-                    'video.mp4');
+                    'video.mp4_');
               },
               child: Icon(Icons.download),
             ),

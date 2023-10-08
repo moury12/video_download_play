@@ -57,6 +57,7 @@ class _VideoListScreenState extends State<VideoListScreen> {
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
                     videoController: videoController,
+                    filePath: filePath,
                   ),
                 ),
               );
@@ -68,10 +69,26 @@ class _VideoListScreenState extends State<VideoListScreen> {
   }
 }
 
-class VideoPlayerScreen extends StatelessWidget {
-  final VideoPlayerController videoController;
+class VideoPlayerScreen extends StatefulWidget {
+  VideoPlayerController videoController;
+  final String filePath;
 
-  VideoPlayerScreen({required this.videoController});
+  VideoPlayerScreen({required this.videoController, required this.filePath});
+
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  @override
+  void initState() {
+    super.initState();
+    widget.videoController = VideoPlayerController.file(File(widget.filePath))
+      ..initialize().then((_) {
+        // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
+        setState(() {});
+      });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,25 +97,27 @@ class VideoPlayerScreen extends StatelessWidget {
         title: Text('Video Player'),
       ),
       body: Center(
-        child: videoController.value.isInitialized
+        child: widget.videoController.value.isInitialized
             ? Container(
                 child: AspectRatio(
-                  aspectRatio: videoController.value.aspectRatio,
-                  child: VideoPlayer(videoController),
+                  aspectRatio: widget.videoController.value.aspectRatio,
+                  child: VideoPlayer(widget.videoController),
                 ),
               )
             : CircularProgressIndicator(),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          if (videoController.value.isPlaying) {
-            videoController.pause();
+          if (widget.videoController.value.isPlaying) {
+            widget.videoController.pause();
           } else {
-            videoController.play();
+            widget.videoController.play();
           }
         },
         child: Icon(
-          videoController.value.isPlaying ? Icons.pause : Icons.play_arrow,
+          widget.videoController.value.isPlaying
+              ? Icons.pause
+              : Icons.play_arrow,
         ),
       ),
     );

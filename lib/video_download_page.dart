@@ -9,6 +9,8 @@ import 'package:sqflite/sqflite.dart';
 import 'package:video_dowload_play/video_player.dart';
 import 'package:video_player/video_player.dart';
 
+import 'notification_service.dart';
+
 class OfflineFileManager {
   static final OfflineFileManager _singleton = OfflineFileManager._internal();
 
@@ -103,6 +105,24 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
   CancelToken cancelToken = CancelToken();
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
   FlutterLocalNotificationsPlugin();
+  var _progressList = <double>[];
+
+  // double count = 0.0;
+
+  double currentProgress(int index) {
+    //fetch the current progress,
+    //its in a list because we might want to download
+    // multiple files at the same time,
+    // so this makes sure the correct download progress
+    // is updated.
+
+    try {
+      return _progressList[index];
+    } catch (e) {
+      _progressList.add(0.0);
+      return 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,8 +216,10 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
     try {
       final response = await dio.get(
         cancelToken: cancelToken,
-        onReceiveProgress: (count, total) {
+        onReceiveProgress: (count, total) async {
           var percentage = count / total * 100;
+
+
           if (percentage < 100) {
             _percentage = percentage / 100;
 
@@ -211,7 +233,6 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
             });
           }
         },
-
         fileUrl,
         options: Options(responseType: ResponseType.bytes),
       );
@@ -237,33 +258,4 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
       print('Error downloading and saving file: $e');
     }
   }
-
-  Future<void> updateNotificationProgress(int progress, int total, String title,
-      String body) async {
-    final AndroidNotificationDetails androidPlatformChannelSpecifics =
-    AndroidNotificationDetails(
-      'download_progress',
-      'Download Progress',
-
-      importance: Importance.low,
-      priority: Priority.low,
-      showProgress: true,
-      // Enable progress indicator
-      maxProgress: total,
-      // Total progress value
-      progress: progress, // Current progress value
-    );
-
-    final NotificationDetails platformChannelSpecifics =
-    NotificationDetails(android: androidPlatformChannelSpecifics);
-
-    await flutterLocalNotificationsPlugin.show(
-      0,
-      title,
-      body,
-      platformChannelSpecifics,
-      payload: 'item x',
-    );
-  }
-
 }

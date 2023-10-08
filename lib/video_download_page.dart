@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart';
@@ -28,7 +29,7 @@ class OfflineFileManager {
 
   Future<Database> initDatabase() async {
     final Directory documentsDirectory =
-        await getApplicationDocumentsDirectory();
+    await getApplicationDocumentsDirectory();
     final String path = join(documentsDirectory.path, 'offline_files.db');
 
     return await openDatabase(
@@ -39,7 +40,10 @@ class OfflineFileManager {
           CREATE TABLE files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT,
-            filepath TEXT
+            filepath TEXT,
+            track INTEGER,
+            userId TEXT,
+            nowPlaying BOOLEAN
           )
         ''');
       },
@@ -53,6 +57,9 @@ class OfflineFileManager {
     final Map<String, dynamic> fileMap = {
       'filename': fileName,
       'filepath': file.path,
+      'track': 123,
+      'userId': 'RT5RT5',
+      'nowPlaying': false
     };
 
     return await db.insert('files', fileMap);
@@ -66,7 +73,7 @@ class OfflineFileManager {
   Future<File?> getFileById(int id) async {
     final db = await database;
     final List<Map<String, dynamic>> result =
-        await db.query('files', where: 'id = ?', whereArgs: [id]);
+    await db.query('files', where: 'id = ?', whereArgs: [id]);
 
     if (result.isNotEmpty) {
       return File(result.first['filepath']);
@@ -89,6 +96,14 @@ class VideoDownloadScreen extends StatefulWidget {
 }
 
 class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
+  double _percentage = .000;
+  String dowloadMessage = 'Waiting...';
+  bool isDownloading = false;
+  bool isWantCancel = false;
+  CancelToken cancelToken = CancelToken();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -99,11 +114,65 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
           children: [
             FloatingActionButton(
               onPressed: () {
+                setState(() {
+                  isDownloading = !isDownloading;
+                });
                 downloadAndSaveFile(
                     'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-                    'video.mp4_');
+                    'video.mp4_${DateTime
+                        .timestamp()
+                        .millisecondsSinceEpoch}');
               },
               child: Icon(Icons.download),
+            ),
+            SizedBox(
+              height: 20,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(dowloadMessage),
+                Text((_percentage.floor()).toString()),
+                isDownloading
+                    ? isWantCancel
+                    ? InkWell(
+                    child: Icon(Icons.play_arrow),
+                    onTap: () {
+                      setState(() {
+                        isDownloading = !isDownloading;
+                      });
+                      downloadAndSaveFile(
+                          'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
+                          'video_${DateTime
+                              .timestamp()
+                              .millisecondsSinceEpoch}.mp4');
+                    })
+                    : InkWell(
+                  child: Icon(Icons.pause),
+                  onTap: () {
+                    cancelToken.cancel();
+                    setState(() {
+                      isWantCancel = true;
+                    });
+                  },
+                )
+                    : SizedBox.shrink()
+              ],
+            ),
+            SizedBox(
+              height: 20,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: LinearProgressIndicator(
+                value: _percentage,
+                backgroundColor:
+                isWantCancel ? Colors.red.shade100 : Colors.green.shade100,
+                color: isWantCancel ? Colors.red : Colors.green,
+              ),
+            ),
+            SizedBox(
+              height: 20,
             ),
             FloatingActionButton(
               onPressed: () {
@@ -126,6 +195,23 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
 
     try {
       final response = await dio.get(
+        cancelToken: cancelToken,
+        onReceiveProgress: (count, total) {
+          var percentage = count / total * 100;
+          if (percentage < 100) {
+            _percentage = percentage / 100;
+
+            setState(() {
+              dowloadMessage = "Downloading..${percentage.floor()}";
+            });
+          } else if (percentage == 100) {
+            setState(() {
+              dowloadMessage = "Completed..${percentage.floor()}";
+              isDownloading = false;
+            });
+          }
+        },
+
         fileUrl,
         options: Options(responseType: ResponseType.bytes),
       );
@@ -151,4 +237,33 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
       print('Error downloading and saving file: $e');
     }
   }
+
+  Future<void> updateNotificationProgress(int progress, int total, String title,
+      String body) async {
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'download_progress',
+      'Download Progress',
+
+      importance: Importance.low,
+      priority: Priority.low,
+      showProgress: true,
+      // Enable progress indicator
+      maxProgress: total,
+      // Total progress value
+      progress: progress, // Current progress value
+    );
+
+    final NotificationDetails platformChannelSpecifics =
+    NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: 'item x',
+    );
+  }
+
 }

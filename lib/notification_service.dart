@@ -1,46 +1,45 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
-  //Hanle displaying of notifications.
-  static final NotificationService _notificationService =
-      NotificationService._internal();
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
-  final AndroidInitializationSettings _androidInitializationSettings =
-      const AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  factory NotificationService() {
-    return _notificationService;
-  }
-
-  NotificationService._internal() {
-    init();
-  }
-
-  void init() async {
+  Future<void> init() async {
+    final AndroidInitializationSettings androidInitializationSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     final InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: _androidInitializationSettings,
-    );
+        InitializationSettings(android: androidInitializationSettings);
     await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  void createNotification(int count, int i, int id) {
-    //show the notifications.
-    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
-        'progress channel', 'progress channel',
-        channelDescription: 'progress channel description',
-        channelShowBadge: false,
-        importance: Importance.max,
-        priority: Priority.high,
-        onlyAlertOnce: true,
-        showProgress: true,
-        maxProgress: count,
-        progress: i);
-    var platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-    _flutterLocalNotificationsPlugin.show(id, 'progress notification title',
-        'progress notification body', platformChannelSpecifics,
-        payload: 'item x');
+  Future<void> updateDownloadProgress(int id, int progress) async {
+    final AndroidNotificationDetails androidNotificationDetails =
+        AndroidNotificationDetails('download_channel_id', 'Download Channel',
+            channelDescription: 'Notification Channel for Downloads',
+            importance: Importance.max,
+            priority: Priority.high,
+            onlyAlertOnce: true,
+            showProgress: true,
+            maxProgress: 100,
+            progress: progress,
+            colorized: true,
+            actions: [
+          AndroidNotificationAction(
+            'cancel_button_id',
+            'Cancel',
+          ),
+        ]
+            // ledColor: Colors.green,
+            );
+
+    final NotificationDetails notificationDetails =
+        NotificationDetails(android: androidNotificationDetails);
+
+    await _flutterLocalNotificationsPlugin.show(
+      id,
+      '${progress.toString()}%',
+      'Download in progress...',
+      notificationDetails,
+    );
   }
 }

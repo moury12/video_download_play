@@ -1,7 +1,6 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:video_dowload_play/video_download_page.dart';
+import 'package:video_dowload_play/database.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoListScreen extends StatefulWidget {
@@ -40,17 +39,29 @@ class _VideoListScreenState extends State<VideoListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Downloaded Videos'),
+        actions: [
+          IconButton(
+              onPressed: () => OfflineFileManager().deleteAllFiles(),
+              icon: Icon(Icons.delete))
+        ],
       ),
       body: ListView.builder(
         itemCount: videoList.length,
         itemBuilder: (context, index) {
           final fileName = videoList[index]['filename'];
           final filePath = videoList[index]['filepath'];
+          final id = videoList[index]['id'];
           final videoController = VideoPlayerController.file(File(filePath));
           videoControllers.add(videoController);
 
           return ListTile(
             title: Text(fileName),
+            trailing: IconButton(
+              icon: Icon(Icons.delete),
+              onPressed: () {
+                OfflineFileManager().deleteFile(id);
+              },
+            ),
             onTap: () {
               Navigator.push(
                 context,

@@ -3,92 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:video_dowload_play/database.dart';
 import 'package:video_dowload_play/video_player.dart';
-import 'package:video_player/video_player.dart';
 
 import 'notification_service.dart';
-
-class OfflineFileManager {
-  static final OfflineFileManager _singleton = OfflineFileManager._internal();
-
-  factory OfflineFileManager() => _singleton;
-
-  static Database? _database;
-
-  OfflineFileManager._internal();
-
-  Future<Database> get database async {
-    if (_database != null) {
-      return _database!;
-    }
-
-    _database = await initDatabase();
-    return _database!;
-  }
-
-  Future<Database> initDatabase() async {
-    final Directory documentsDirectory =
-    await getApplicationDocumentsDirectory();
-    final String path = join(documentsDirectory.path, 'offline_files.db');
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (Database db, int version) async {
-        await db.execute('''
-          CREATE TABLE files (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename TEXT,
-            filepath TEXT,
-            track INTEGER,
-            userId TEXT,
-            nowPlaying BOOLEAN
-          )
-        ''');
-      },
-    );
-  }
-
-  Future<int> insertFile(File file) async {
-    final db = await database;
-    final String fileName = basename(file.path);
-
-    final Map<String, dynamic> fileMap = {
-      'filename': fileName,
-      'filepath': file.path,
-      'track': 123,
-      'userId': 'RT5RT5',
-      'nowPlaying': false
-    };
-
-    return await db.insert('files', fileMap);
-  }
-
-  Future<List<Map<String, dynamic>>> getFiles() async {
-    final db = await database;
-    return await db.query('files');
-  }
-
-  Future<File?> getFileById(int id) async {
-    final db = await database;
-    final List<Map<String, dynamic>> result =
-    await db.query('files', where: 'id = ?', whereArgs: [id]);
-
-    if (result.isNotEmpty) {
-      return File(result.first['filepath']);
-    } else {
-      return null;
-    }
-  }
-
-  Future<void> deleteFile(int id) async {
-    final db = await database;
-    await db.delete('files', where: 'id = ?', whereArgs: [id]);
-  }
-}
 
 class VideoDownloadScreen extends StatefulWidget {
   const VideoDownloadScreen({super.key});
@@ -98,29 +17,21 @@ class VideoDownloadScreen extends StatefulWidget {
 }
 
 class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
-  double _percentage = .000;
+  double _percentage = 0;
   String dowloadMessage = 'Waiting...';
   bool isDownloading = false;
   bool isWantCancel = false;
   CancelToken cancelToken = CancelToken();
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
   var _progressList = <double>[];
-
-  // double count = 0.0;
+  int currentIndex = -1;
 
   double currentProgress(int index) {
-    //fetch the current progress,
-    //its in a list because we might want to download
-    // multiple files at the same time,
-    // so this makes sure the correct download progress
-    // is updated.
-
-    try {
+    if (index >= 0 && index < _progressList.length) {
       return _progressList[index];
-    } catch (e) {
-      _progressList.add(0.0);
-      return 0;
+    } else {
+      return 0.0;
     }
   }
 
@@ -137,14 +48,21 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
                 setState(() {
                   isDownloading = !isDownloading;
                 });
+                currentIndex++;
                 downloadAndSaveFile(
-                    'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-                    'video.mp4_${DateTime
-                        .timestamp()
-                        .millisecondsSinceEpoch}');
+                    // 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
+                    'https://rr5---sn-npoe7nds.googlevideo.com/videoplayback?expire=1696855664&ei=EKIjZba2K8_V7gS1sYvADA&ip=138.199.59.216&id=o-AEdhQV0FRMnnj62CRbWLy1xZgswcMds27fOguY-ZCIp6&itag=22&source=youtube&requiressl=yes&spc=UWF9f9Q8Uwyl7bcRm5uMEhTjrI_o01Q&vprv=1&svpuc=1&mime=video%2Fmp4&cnr=14&ratebypass=yes&dur=528.880&lmt=1683822433138265&fexp=24007246,24350018&beids=24350018&c=ANDROID&txp=5318224&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AGM4YrMwRQIhALOVgSKmFy-zKCRSNXtTGnIiY4QgsWGVcHP8vrKgdzSgAiAlrj7CSsvvh6bjR3DRbFsE6h6mF7suIBsD-mCfOolbVg%3D%3D&title=MS%20Excel%2015%20Keyboard%20Shortcut%20For%20Office%20Work%20!%20MS%20Excel%20Top%20Keyboard%20Shortcut&rm=sn-5uh5o-f5fs7e,sn-f5fez7l&req_id=59dc60eea549a3ee&cmsv=e&redirect_counter=2&cms_redirect=yes&ipbypass=yes&mh=jJ&mip=103.81.199.65&mm=29&mn=sn-npoe7nds&ms=rdu&mt=1696833681&mv=m&mvi=5&pl=24&lsparams=ipbypass,mh,mip,mm,mn,ms,mv,mvi,pl&lsig=AK1ks_kwRQIhAI94Myx938WpvHumgO-HbA9UxS-8BBKpaD6wL1DxG0hXAiAqBCg2XT5J9VBEIABNlDWNrll7ACT5Pmo_hX9dmrEYZQ%3D%3D',
+                    'video.mp4_${DateTime.timestamp().millisecondsSinceEpoch}');
               },
               child: Icon(Icons.download),
             ),
+            SizedBox(
+              height: 20,
+            ),
+            // ElevatedButton(
+            //     onPressed: () =>
+            //         OfflineFileManager().alterTable('files', 'nowPlaying'),
+            //     child: Text('Alter')),
             SizedBox(
               height: 20,
             ),
@@ -155,27 +73,23 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
                 Text((_percentage.floor()).toString()),
                 isDownloading
                     ? isWantCancel
-                    ? InkWell(
-                    child: Icon(Icons.play_arrow),
-                    onTap: () {
-                      setState(() {
-                        isDownloading = !isDownloading;
-                      });
-                      downloadAndSaveFile(
-                          'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-                          'video_${DateTime
-                              .timestamp()
-                              .millisecondsSinceEpoch}.mp4');
-                    })
-                    : InkWell(
-                  child: Icon(Icons.pause),
-                  onTap: () {
-                    cancelToken.cancel();
-                    setState(() {
-                      isWantCancel = true;
-                    });
-                  },
-                )
+                        ? InkWell(
+                            child: Icon(Icons.play_arrow),
+                            onTap: () {
+                              setState(() {
+                                isWantCancel = false;
+                              });
+                              cancelDownload();
+                            })
+                        : InkWell(
+                            child: Icon(Icons.pause),
+                            onTap: () {
+                              cancelToken.cancel();
+                              setState(() {
+                                isWantCancel = true;
+                              });
+                            },
+                          )
                     : SizedBox.shrink()
               ],
             ),
@@ -187,7 +101,7 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
               child: LinearProgressIndicator(
                 value: _percentage,
                 backgroundColor:
-                isWantCancel ? Colors.red.shade100 : Colors.green.shade100,
+                    isWantCancel ? Colors.red.shade100 : Colors.green.shade100,
                 color: isWantCancel ? Colors.red : Colors.green,
               ),
             ),
@@ -215,10 +129,22 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
 
     try {
       final response = await dio.get(
+        fileUrl,
         cancelToken: cancelToken,
         onReceiveProgress: (count, total) async {
           var percentage = count / total * 100;
 
+          if (currentIndex < _progressList.length) {
+            _progressList[currentIndex] = percentage.toDouble();
+          } else {
+            _progressList.add(percentage.toDouble());
+          }
+
+          // Update notification progress
+          await NotificationService().updateDownloadProgress(
+            currentIndex,
+            percentage.floor(),
+          );
 
           if (percentage < 100) {
             _percentage = percentage / 100;
@@ -233,7 +159,6 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
             });
           }
         },
-        fileUrl,
         options: Options(responseType: ResponseType.bytes),
       );
 
@@ -257,5 +182,12 @@ class _VideoDownloadScreenState extends State<VideoDownloadScreen> {
     } catch (e) {
       print('Error downloading and saving file: $e');
     }
+  }
+
+  void cancelDownload() {
+    if (cancelToken.isCancelled) {
+      return; // Already canceled
+    }
+    cancelToken.cancel("Canceled by user");
   }
 }

@@ -9,11 +9,20 @@ void main() async {
       FlutterLocalNotificationsPlugin();
 
   final AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings(
-          '@mipmap/ic_launcher'); // Replace with your app's icon
+      AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  final InitializationSettings initializationSettings =
-      InitializationSettings(android: initializationSettingsAndroid);
+  final DarwinInitializationSettings initializationSettingsIOS =
+      const DarwinInitializationSettings(
+    requestSoundPermission: false,
+    requestBadgePermission: false,
+    requestAlertPermission: false,
+    // onDidReceiveLocalNotification: onDidReceiveLocalNotification,
+  );
+
+  final InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+      macOS: null);
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   runApp(const MyApp());
